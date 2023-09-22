@@ -1,10 +1,11 @@
-import os
+"""Search for test case ID numbers, which contains the pattern."""
 from argparse import ArgumentParser
 
 from pathlib import Path
 
 
 def id_number(row: str) -> str:
+    """Check and return test ID number."""
     index = row.find("4AP2-")
     if index != -1:
         return row[index:].split(" ")[0]
@@ -12,6 +13,7 @@ def id_number(row: str) -> str:
 
 
 def find_space_count(row: str, pattern: str) -> int:
+    """Search for space before def and method with pattern."""
     count = None
     if pattern.find(" = ") != -1:
         row_split = row.split("    ")
@@ -37,6 +39,7 @@ def find_space_count(row: str, pattern: str) -> int:
 
 
 def find_new_pattern(read_text: str, idx_list: list, pattern: str) -> list:
+    """Search for function definition and returns as new pattern."""
     rows_with_patterns: list = []
     new_patterns: list = []
 
@@ -58,20 +61,24 @@ def find_new_pattern(read_text: str, idx_list: list, pattern: str) -> list:
                     rows_with_patterns.append(read_text[line])
                     break
 
-    for pattern in rows_with_patterns:
+    for element in rows_with_patterns:
         pats = []
-        pat = pattern.split("()")[0]
+        pat = element.split("(")[0]
         for text in read_text:
             if text.find(pat) != -1:
                 pats.append(pat)
         if len(pats) == 1:
-            index = pattern.find("def ")
-            new_patterns.append(pattern[index + 4 :].split("(")[0] + "(")
+            index = element.find("def ")
+            new_patterns.append(element[index + 4 :].split("(")[0] + "(")
 
     return new_patterns
 
 
 def find_function_name(path: Path, find_pattern: str) -> list:
+    """Search for function, which contains given pattern definition,
+    and returns function name as string.
+    """
+
     idx_list = []
     read_text = Path(path).read_text(encoding="utf-8").split("\n")
 
@@ -86,7 +93,8 @@ def find_function_name(path: Path, find_pattern: str) -> list:
     return new_pattern
 
 
-def find_tests(source_path: Path, find_pattern: str) -> list:
+def find_test_id(source_path: Path, find_pattern: str) -> list:
+    """Search for test ID number, which contains given pattern."""
     id_list: list = []
     source_path = source_path / "test_cases"
 
@@ -107,6 +115,10 @@ def find_tests(source_path: Path, find_pattern: str) -> list:
 
 
 def find_new_patterns(source_path: Path, find_pattern: str) -> list:
+    """Search pattern in methods. If method contains given pattern,
+    returns function name as new pattern.
+    """
+
     pattern_list: list = []
     for file_name in source_path.rglob("*.py"):
         if str(file_name).find("test_cases") != -1:
@@ -126,38 +138,45 @@ def find_new_patterns(source_path: Path, find_pattern: str) -> list:
     return pattern_list
 
 
-def start_function(source_path: Path, pattern: str) -> list:
-    pattern_dict = {pattern: 0}
-    test_ids: list = []
+def find_tests(
+    source_path: Path,
+    patterns: list,
+    test_ids: list = [],
+    pattern_searched: list = [],
+    rec: int = 6,
+) -> list:
+    """Find test ID numbers, which contains given pattern.
+    Search for new pattern in methods, in which given pattern is used
+    """
 
-    for i in range(6):
-        new_patterns: list = []
-        for pat, value in pattern_dict.items():
-            if value == 0:  #
-                test_ids.extend(find_tests(source_path=source_path, find_pattern=pat))
-                new_patterns.extend(
-                    find_new_patterns(source_path=source_path, find_pattern=pat)
-                )
-                pattern_dict[pat] = 1
+    for pattern in patterns:
+        if pattern not in pattern_searched:
+            test_ids.extend(find_test_id(source_path=source_path, find_pattern=pattern))
+            new_patterns = find_new_patterns(
+                source_path=source_path, find_pattern=pattern
+            )
+            pattern_searched.extend(patterns)
+            rec -= 1
 
-        for pattern in new_patterns:
-            if pattern not in pattern_dict:
-                pattern_dict[pattern] = 0
+    if rec > 1 and new_patterns:
+        find_tests(
+            source_path=source_path,
+            patterns=new_patterns,
+            test_ids=test_ids,
+            pattern_searched=pattern_searched,
+            rec=rec,
+        )
+
     print(len(set(test_ids)))
-    print(pattern_dict)
+    print(pattern_searched)
     return set(test_ids)
 
 
 if __name__ == "__main__":
-    # parser: ArgumentParser = ArgumentParser(description="Search for test case ID number, which contains the pattern.")
-    # parser.add_argument("PATTERN", help="Pattern to search for", type=str)
-    # parser.add_argument("DIR", help="Directory to search in", type=Path)
-    # args = parser.parse_args()
-
-    # file_path = Path('C:/Users/marius.sutkus.QDTEAM/Documents/training/code/TestAutomation/procedures/program/cleaning.py')
-    source_path = Path(
-        "C:/Users/marius.sutkus.QDTEAM/Documents/training/code/TestAutomation"
+    parser: ArgumentParser = ArgumentParser(
+        description="Search for test case ID number, which contains the pattern."
     )
-    pattern = "reconnect_shunts("
-    # pattern = 'cleaning.start_cleaning('
-    print(start_function(source_path=source_path, pattern=pattern))
+    parser.add_argument("DIR", help="Directory to search in", type=Path)
+    parser.add_argument("PATTERN", help="Pattern to search for", type=str)
+    args = parser.parse_args()
+    print(find_tests(source_path=args.DIR, patterns=[args.PATTERN]))
